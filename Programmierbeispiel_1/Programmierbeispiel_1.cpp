@@ -24,7 +24,7 @@ int main()
     std::cout << "(1) - ADD | (2) - DEL | (3) - IMPORT | (4) - SEARCH | (5) - PLOT | (6) - SAVE | (7) - LOAD | (8) - QUIT" << std::endl;
 
     do {
-        std::cout << "Choose: ";
+        std::cout << "Select: ";
         std::cin >> option;
     } while (option <= 0 || option > 8);
 
