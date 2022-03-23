@@ -285,6 +285,55 @@ void displaySearchResults(struct share* result)
     system("cls");
 }
 
+//Terribly inefficient way to delete entry (at least O(n)), so maybe improveable if we have time, good enough for now
+void deleteEntry(struct share* entryToDelete, struct share* kuerzelHashTable[HASH_TABLE_SIZE], struct mapNameToKuerzel* nameHashTable[HASH_TABLE_SIZE])
+{
+    if (entryToDelete != NULL) {
+        //Variable to stop loop after both entries have been found
+        int success = 0;
+
+        //Loop through both hash tables
+        for (int i = 0; i < HASH_TABLE_SIZE && success < 2; i++) {
+            //If entry is found
+            if (entryToDelete == kuerzelHashTable[i]) {
+                //First, delete current entry
+                delete kuerzelHashTable[i];
+
+                //Second, create a new dummy entry that should never trigger if one searches for a kuerzel
+                struct share* dummyStruct = new struct share();
+                dummyStruct->kuerzel = "EntryDeleted";
+
+                //Third, add that dummy entry to the spot of the old entry
+                kuerzelHashTable[i] = dummyStruct;
+
+                //Lastly, increment success
+                success++;
+            }
+
+            //Same logic as above, just for other struct type
+            if (nameHashTable[i] != NULL && entryToDelete->kuerzel == nameHashTable[i]->kuerzel) {
+                delete nameHashTable[i];
+
+                struct mapNameToKuerzel* dummyStruct = new struct mapNameToKuerzel();
+                dummyStruct->name = "EntryDeleted";
+
+                nameHashTable[i] = dummyStruct;
+
+                success++;
+            }
+        }
+
+        //If both entries were deleted, print message
+        if (success >= 2)
+            std::cout << "Delete successful\n" << std::endl;
+        else
+            std::cout << "Oh oh, something went wrong! Please exit the program without saving.\n" << std::endl;
+    }
+    else std::cout << "Entry not found!\n" << std::endl;
+
+    system("pause");
+}
+
 int main()
 {
     //Initializes both hash tables - One is hashed with the kürzel, the other one with the name
@@ -308,23 +357,24 @@ int main()
 
         switch (option)
         {
-        case 1:
-            add(kuerzelHashTable, nameHashTable);
-            break;
-        case 2:
-            break;
-        case 3:
-            displaySearchResults(search(kuerzelHashTable, nameHashTable));
-            break;
-        case 4:
-            break;
-        case 5:
-            break;
-        case 6:
-            break;
-        case 7:
-            loop = false;
-            break;
+            case 1:
+                add(kuerzelHashTable, nameHashTable);
+                break;
+            case 2:
+                deleteEntry(search(kuerzelHashTable, nameHashTable), kuerzelHashTable, nameHashTable);
+                break;
+            case 3:
+                displaySearchResults(search(kuerzelHashTable, nameHashTable));
+                break;
+            case 4:
+                break;
+            case 5:
+                break;
+            case 6:
+                break;
+            case 7:
+                loop = false;
+                break;
         }
     }
 
