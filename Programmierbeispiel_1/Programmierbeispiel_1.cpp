@@ -222,33 +222,6 @@ void importData(std::string fileName, struct share* associatedShare) {
     }
 }
 
-//DEBUGGING FUNCTION, DELETE LATER
-//Prints all information about all shares in hash table
-void printAllShareData(struct share* kuerzelHashTable[HASH_TABLE_SIZE])
-{
-    system("cls");
-
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-
-        if (kuerzelHashTable[i] != NULL) {
-            std::cout << "Index: " << i << std::endl;
-            std::cout << "Name: " << kuerzelHashTable[i]->name << std::endl;
-            std::cout << "Kuerzel: " << kuerzelHashTable[i]->kuerzel << std::endl;
-            std::cout << "WKN: " << kuerzelHashTable[i]->wkn << std::endl;
-            std::cout << "Data: " << std::endl;
-
-            for (int day = 0; day < 30; day++) {
-                struct kursdaten entry = kuerzelHashTable[i]->kursdaten[day];
-                std::cout << entry.date << ": " << entry.open << " | " << entry.high << " | " << entry.low << " | " << entry.close << " | " << entry.adjClose << " | " << entry.volume << std::endl;
-            }
-            std::cout << std::endl;
-        }
-    }
-
-    system("pause");
-    system("cls");
-}
-
 //Adds a new share to the arrays
 void add(struct share* kuerzelHashTable[HASH_TABLE_SIZE], struct mapNameToKuerzel* nameHashTable[HASH_TABLE_SIZE])
 {
@@ -285,8 +258,8 @@ void add(struct share* kuerzelHashTable[HASH_TABLE_SIZE], struct mapNameToKuerze
     kuerzelHashTable[probing::quadraticProbingForAddingKuerzel(kuerzel, kuerzelHashTable)] = newShare;
     nameHashTable[probing::quadraticProbingForAddingName(name, nameHashTable)] = newMap;
 
-    //DEBUGGING ONLY, REMOVE BEFORE FINAL SUBMIT
-    printAllShareData(kuerzelHashTable);
+    std::cout << "Share successfully added!\n" << std::endl;
+    system("pause");
 }
 
 //Searches for either a name or a kuerzel in the corresponding hash table, returns NULL if nothing is found
@@ -524,6 +497,217 @@ void plot(struct share* shareToPlot)
     system("cls");
 }
 
+//Saves both hash tables into two files
+void saveData(struct share* kuerzelHashTable[HASH_TABLE_SIZE], struct mapNameToKuerzel* nameHashTable[HASH_TABLE_SIZE]) {
+    // Open and overwrite (or create a new) text file
+    std::ofstream stockFile("kuerzelHashTable.txt", std::ofstream::trunc);
+
+    //If that was successfull, save all data into it
+    if (stockFile.is_open()) {
+        // Write to the file
+        for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+            //Saving format is as follows:
+            // 
+            //NULL
+            //NULL
+            //<name>|<kuerzel>|<wkn>:<date>|<open>| ... |<volume>;<date>|<open> ...
+            //NULL
+            //...
+            //
+            //This means that for every spot in the hash table, 1 line with either NULL or data exists in the file
+
+            //If data is not NULL, save data as described above
+            if (kuerzelHashTable[i] != NULL) {
+                stockFile << kuerzelHashTable[i]->name;
+                stockFile << "|" << kuerzelHashTable[i]->kuerzel;
+                stockFile << "|" << kuerzelHashTable[i]->wkn;
+                stockFile << ":";
+
+                for (int day = 0; day < 30; day++) {
+                    struct kursdaten entry = kuerzelHashTable[i]->kursdaten[day];
+                    stockFile << entry.date << "|" << entry.open << "|" << entry.high << "|" << entry.low << "|" << entry.close << "|" << entry.adjClose << "|" << entry.volume << ";";
+                }
+                stockFile << "\n";
+            }
+            //Otherwise save the string "NULL"
+            else {
+                stockFile << "NULL\n";
+            }
+        }
+
+        //Print success message
+        std::cout << "Data successfully saved into \"kuerzelHashTable.txt\"" << std::endl;
+        // Close the file
+        stockFile.close();
+    }
+    else {
+        std::cout << "Unable to create file \"kuerzelHashTable.txt\"" << std::endl;
+    }
+
+
+    //Same thing as above, just for the other hashTable
+    //For comments on how this works see above
+    std::ofstream nameFile("nameHashTable.txt", std::ofstream::trunc);
+
+    if (nameFile.is_open()) {
+        // Write to the file
+        for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+            //Saving format is as follows:
+            // 
+            //NULL
+            //NULL
+            //<name>|<kuerzel>
+            //NULL
+            //...
+
+            if (nameHashTable[i] != NULL) {
+                nameFile << nameHashTable[i]->name << "|" << nameHashTable[i]->kuerzel << "\n";
+            }
+            else {
+                nameFile << "NULL\n";
+            }
+        }
+
+        //Print success message
+        std::cout << "Data successfully saved into \"nameHashTable.txt\"" << std::endl;
+        // Close the file
+        nameFile.close();
+    }
+    else {
+        std::cout << "Unable to create file \"nameHashTable.txt\"" << std::endl;
+    }
+
+    std::cout << std::endl;
+    system("pause");
+}
+
+//Fills both hash tables with data from two files
+void loadData(struct share* kuerzelHashTable[HASH_TABLE_SIZE], struct mapNameToKuerzel* nameHashTable[HASH_TABLE_SIZE]) {
+    //Open file
+    std::ifstream stockFile("kuerzelHashTable.txt");
+    //If it is opened, read data
+    if (stockFile.is_open())
+    {
+        //Before we start loading (and potentially overwriting the already existing) shares, clear the heap once
+        clearHeap(kuerzelHashTable, nameHashTable);
+
+        std::string line;
+
+        //Index in hashTable corresponds directly to each line in the file, so we can simply increment an index and always have the correct position
+        int i = 0;
+        while (getline(stockFile, line)) {
+            //If the line reads "NULL", the corresponding index in the hashTable is NULL
+            if (line == "NULL")
+                kuerzelHashTable[i] = NULL;
+            else {
+                //For information on what this does and how this works see importData() function above
+                std::string name = line.substr(0, line.find("|"));
+                line.erase(0, line.find("|") + 1);
+
+                std::string kuerzel = line.substr(0, line.find("|"));
+                line.erase(0, line.find("|") + 1);
+
+                std::string wkn = line.substr(0, line.find(":"));
+                line.erase(0, line.find(":") + 1);
+
+                struct share* newShare = new struct share();
+
+                newShare->name = name;
+                newShare->kuerzel = kuerzel;
+                newShare->wkn = wkn;
+
+                for (int day = 0; day < 30; day++) {
+                    std::string date = line.substr(0, line.find("|"));
+                    line.erase(0, line.find("|") + 1);
+
+                    float open = std::stof(line.substr(0, line.find("|")));
+                    line.erase(0, line.find("|") + 1);
+
+                    float high = std::stof(line.substr(0, line.find("|")));
+                    line.erase(0, line.find("|") + 1);
+
+                    float low = std::stof(line.substr(0, line.find("|")));
+                    line.erase(0, line.find("|") + 1);
+
+                    float close = std::stof(line.substr(0, line.find("|")));
+                    line.erase(0, line.find("|") + 1);
+
+                    float adjClose = std::stof(line.substr(0, line.find("|")));
+                    line.erase(0, line.find("|") + 1);
+
+                    long int volume = std::stoi(line.substr(0, line.find(";")));
+                    line.erase(0, line.find(";") + 1);
+
+                    //Creates a new struct from the data
+                    struct kursdaten newDay = {
+                        date,
+                        open,
+                        high,
+                        low,
+                        close,
+                        volume,
+                        adjClose
+                    };
+
+                    newShare->kursdaten[day] = newDay;
+                }
+
+                kuerzelHashTable[i] = newShare;
+            }
+
+            //Increment index
+            i++;
+        }
+
+        //Print success message
+        std::cout << "File \"kuerzelHashTable.txt\" successfully loaded!" << std::endl;
+        stockFile.close();
+    }
+    else {
+        std::cout << "Unable to open file \"kuerzelHashTable.txt\"!" << std::endl;
+    }
+
+    //Exact same thing as above, just for other hashTable
+    //For comments on how this works see above
+    std::ifstream nameFile("nameHashTable.txt");
+
+    if (nameFile.is_open())
+    {
+        std::string line;
+
+        int i = 0;
+        while (getline(nameFile, line)) {
+
+            if (line == "NULL")
+                nameHashTable[i] = NULL;
+            else {
+                std::string name = line.substr(0, line.find("|"));
+                line.erase(0, line.find("|") + 1);
+
+                std::string kuerzel = line.substr(0, line.find("|"));
+
+                struct mapNameToKuerzel* newStruct = new struct mapNameToKuerzel();
+
+                newStruct->name = name;
+                newStruct->kuerzel = kuerzel;
+           
+                nameHashTable[i] = newStruct;
+            }
+
+            i++;
+        }
+
+        std::cout << "File \"nameHashTable.txt\" successfully loaded!" << std::endl;
+        nameFile.close();
+    }
+    else {
+        std::cout << "Unable to open file \"nameHashTable.txt\"!" << std::endl;
+    }
+
+    std::cout << std::endl;
+    system("pause");
+}
+
 int main()
 {
     //Initializes both hash tables - One is hashed with the kürzel, the other one with the name
@@ -532,7 +716,6 @@ int main()
 
     //Flag to stop looping if user wants to exit
     bool loop = true;
-
     while (loop) {
         system("cls");
 
@@ -560,8 +743,10 @@ int main()
                 plot(search(kuerzelHashTable, nameHashTable));
                 break;
             case 5:
+                saveData(kuerzelHashTable, nameHashTable);
                 break;
             case 6:
+                loadData(kuerzelHashTable, nameHashTable);
                 break;
             case 7:
                 loop = false;
