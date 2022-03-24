@@ -57,37 +57,120 @@ int hashFunc(std::string str) {
     for (std::string::size_type i = 0; i < str.size(); ++i) {
         sum = sum + int(str[i]);
     }
-    //-1, because array has on last index '\0'
-    int hashIndex = (sum * (HASH_TABLE_SIZE / 360)) % HASH_TABLE_SIZE;
+
+    int hashIndex = ((sum - 195) * HASH_TABLE_SIZE / (360 - 195)) % HASH_TABLE_SIZE;
 
     return hashIndex;
+}
+
+namespace probing {
+    //Function returs the share corresponding to the kuerzel, or NULL if not found
+    struct share* quadraticProbingForSearchingKuerzel(std::string kuerzel, struct share* stocks[HASH_TABLE_SIZE]) {
+        int i = 1;
+        int hashIndex = hashFunc(kuerzel);
+        while (stocks[hashIndex] != NULL) {
+            //Quadratic probing
+            if (stocks[hashIndex]->kuerzel == kuerzel) {
+                return stocks[hashIndex];
+            }
+            hashIndex = (hashIndex + (i * i)) % HASH_TABLE_SIZE;
+            i++;
+        }
+        //return if index stock[hashIndex] == NULL -> not found
+        return NULL;
+    }
+
+    //quadraticProbingForSearchingName gets different struct as parameter & returns the corresponding kuerzel if it is found
+    std::string quadraticProbingForSearchingName(std::string name, struct mapNameToKuerzel* stocks[HASH_TABLE_SIZE]) {
+        int i = 1;
+        int hashIndex = hashFunc(name);
+        while (stocks[hashIndex] != NULL) {
+            //Quadratic probing
+            if (stocks[hashIndex]->name == name) {
+                return stocks[hashIndex]->kuerzel;
+            }
+            hashIndex = (hashIndex + (i * i)) % HASH_TABLE_SIZE;
+            i++;
+        }
+        //return if index stock[hashIndex] == NULL -> no value
+        return "";
+    }
+
+    //Returns the first empty index
+    int quadraticProbingForAddingKuerzel(std::string kuerzel, struct share* stocks[HASH_TABLE_SIZE]) {
+        int i = 1;
+        int hashIndex = hashFunc(kuerzel);
+
+        while (stocks[hashIndex] != NULL) {
+            //Quadratic probing
+            hashIndex = (hashIndex + i * i) % HASH_TABLE_SIZE;
+            i++;
+        }
+
+        return hashIndex;
+    }
+
+    //Exact same as function above just for other hash table
+    int quadraticProbingForAddingName(std::string name, struct mapNameToKuerzel* stocks[HASH_TABLE_SIZE]) {
+        int i = 1;
+        int hashIndex = hashFunc(name);
+
+        while (stocks[hashIndex] != NULL) {
+            //Quadratic probing
+            hashIndex = (hashIndex + i * i) % HASH_TABLE_SIZE;
+            i++;
+        }
+
+        return hashIndex;
+    }
+}
+
+//Helper function for importData
+int countLines(std::string fileName) {
+    std::ifstream file("csv_data/" + fileName);
+
+    //Count how many lines the file has
+    int count = 0;
+    if (file.is_open()) {
+        std::string line;
+        while (getline(file, line))
+        {
+            ++count;
+        }
+        file.close();
+
+        return count;
+    }
+    //If the file could not be opened, return -1
+    else {
+        return -1;
+    }
 }
 
 //Imports share-data from file, saves it in share-struct
 void importData(std::string fileName, struct share* associatedShare) {
     //Loops as long as no file could be opened
     //Done to prevent shares being added without share data
-    bool fileOpen = false;
-    while (!fileOpen) {
-        fileOpen = true;
+    int lineCount = -1;
+    while (lineCount == -1) {
+        //Counts the lines in a file, if file is not found return -1 and continue looping
+        lineCount = countLines(fileName);
 
         std::ifstream file("csv_data/" + fileName);
 
         if (file.is_open())
         {
             std::string line;
-            int lineCounter = 0;
-            //Loop for each line in csv
+
+            //Reads and discards all lines except the last 30
+            //Needs to be done because the most recent entries are at the end of the file, so we need the last 30 lines
+            for (int i = 0; i < lineCount - 30; i++) {
+                getline(file, line);
+            }
+
+            int index = 0;
+            //Loop for each remaining line in csv
             while (getline(file, line)) {
-                lineCounter++;
-
-                //If counter is 31 (so we are on day 30 + first line of headers) break
-                if (lineCounter > 31)
-                    break;
-                //If counter is 1 (so we are on first line of headers) go to next line
-                else if (lineCounter == 1)
-                    continue;
-
                 //Probably not the best way of doing it, but whatever it works
                 //Finds the first instance of a "," in the line-string, and saves the string in front of it into a new variable
                 //(often that string also then gets convertet into a float with stof()),
@@ -123,12 +206,13 @@ void importData(std::string fileName, struct share* associatedShare) {
                     adjClose
                 };
                 //Adds that struct to the kursdaten array (-1 for line headers, -1 for index not counter = linecounter - 2)
-                associatedShare->kursdaten[lineCounter - 2] = newDay;
+                associatedShare->kursdaten[index] = newDay;
+                //Increment index
+                index++;
             }
             file.close();
         }
         else {
-            fileOpen = false;
             std::cout << "Unable to open file! Make sure the file is inside the folder 'csv_data'!" << std::endl;
             do {
                 std::cout << "Full filename: ";
@@ -197,9 +281,9 @@ void add(struct share* kuerzelHashTable[HASH_TABLE_SIZE], struct mapNameToKuerze
     //Imports (and saves) the data to the newShare struct
     importData(kuerzel + ".csv", newShare);
 
-    //Saves both structs inside their respective hash tables
-    kuerzelHashTable[hashFunc(kuerzel)] = newShare;
-    nameHashTable[hashFunc(name)] = newMap;
+    //Saves both structs inside their respective hash tables at the index returned by quadratic probing
+    kuerzelHashTable[probing::quadraticProbingForAddingKuerzel(kuerzel, kuerzelHashTable)] = newShare;
+    nameHashTable[probing::quadraticProbingForAddingName(name, nameHashTable)] = newMap;
 
     //DEBUGGING ONLY, REMOVE BEFORE FINAL SUBMIT
     printAllShareData(kuerzelHashTable);
@@ -228,18 +312,11 @@ struct share* search(struct share* kuerzelHashTable[HASH_TABLE_SIZE], struct map
             std::cin >> name;
         } while (name.length() <= 0);
 
-        //Search for that name in the hash table
-        struct mapNameToKuerzel* result = nameHashTable[hashFunc(name)];
-
-        //If result is NULL immediately, return NULL
-        if (result == NULL)
+        //Look through hash table if we can find the kuerzel, if not, return NULL
+        kuerzel = probing::quadraticProbingForSearchingName(name, nameHashTable);
+        if (kuerzel == "") {
             return NULL;
-        //Otherwise check if result is correct, if it is not, do cubic jumping
-        else if (result->name != name) {
-            //INSERT CUBIC JUMPING HERE
         }
-
-        kuerzel = result->kuerzel;
     }
     //Otherwise simply ask the user to input the kuerzel
     else {
@@ -250,19 +327,8 @@ struct share* search(struct share* kuerzelHashTable[HASH_TABLE_SIZE], struct map
         } while (kuerzel.length() <= 0);
     }
 
-    //Search for the kuerzel in the hash table
-    struct share* result = kuerzelHashTable[hashFunc(kuerzel)];
-
-    //If result is NULL immediately, return NULL
-    if (result == NULL)
-        return NULL;
-    //Otherwise check if result is correct, if it is not, do cubic jumping
-    else if (result->kuerzel != kuerzel) {
-        //INSERT CUBIC JUMPING HERE
-    }
-
-    //Return the result
-    return result;
+    //Return the found struct or NULL if not found
+    return probing::quadraticProbingForSearchingKuerzel(kuerzel, kuerzelHashTable);
 }
 
 //Displays the search results
@@ -276,7 +342,8 @@ void displaySearchResults(struct share* result)
         std::cout << "WKN: " << result->wkn << std::endl;
         std::cout << "Data: " << std::endl;
 
-        struct kursdaten entry = result->kursdaten[0];
+        //Most recent entry is the last one in the array
+        struct kursdaten entry = result->kursdaten[29];
         std::cout << entry.date << ": " << entry.open << " | " << entry.high << " | " << entry.low << " | " << entry.close << " | " << entry.adjClose << " | " << entry.volume << "\n" << std::endl;
     }
     else std::cout << "Entry not found!\n" << std::endl;
